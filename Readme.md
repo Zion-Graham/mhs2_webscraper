@@ -1,0 +1,1 @@
+In the mhs2_webscraper directory, run "ruby run.rb" to scrape data from "https://mhst.kiranico.com/mhs2/data/monsties" and export it to a monsties.json file.

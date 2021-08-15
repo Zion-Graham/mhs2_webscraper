@@ -1,20 +1,43 @@
 require 'open-uri'
 require 'nokogiri'
 require 'json'
+require 'ruby-progressbar'
 
 # This module scrapes Monster Hunter Stories 2 data from Kiranico
 module Scraper
-  @doc = Nokogiri::HTML(URI.open('Monsties MHS2 Kiranico Monster Hunter Stories 2 Wings of Ruin Database.html'))
+  @doc = Nokogiri::HTML(URI.open('https://mhst.kiranico.com/mhs2/data/monsties'))
   class << self
     def names
-      @names ||= @doc.xpath('/html/body/div/div/div[2]/div[2]/div[1]/div/table/tbody/tr/td[1]/div')
-                     .map(&:text)
-                     .map(&:strip)
+      return @names unless @names.nil?
+
+      divs = @doc.xpath('/html/body/div/div/div[2]/div[2]/div[1]/div/table/tbody/tr/td[1]/div')
+
+      pb = ProgressBar.create(
+        title: 'Scraping Monsite Names', total: divs.size,
+        format: '%t |%b>%i| %c/%C'
+      )
+      @names = divs.map do |div|
+        pb.increment
+
+        div.text.strip
+      end
     end
 
     # Gets the attack type, kinship skill, and riding actions for all monsties
     def data_under_names
-      @data_under_names ||= @doc.xpath('/html/body/div/div/div[2]/div[2]/div[1]/div/table/tbody/tr/td[1]/small').map do |small|
+      return @data_under_names unless @data_under_names.nil?
+
+      small_tags = @doc.xpath('/html/body/div/div/div[2]/div[2]/div[1]/div/table/tbody/tr/td[1]/small')
+
+      pb = ProgressBar.create(
+        title: 'Scraping data under Monstie names (attack type, kinship skill, riding actions)',
+        total: small_tags.size,
+        format: '%t |%b>%i| %c/%C'
+      )
+
+      @data_under_names = small_tags.map do |small|
+        pb.increment
+
         attack_type, kinship_skill, *riding_actions = small.css('div')
         {
           attack_type: attack_type.text,
@@ -25,8 +48,19 @@ module Scraper
     end
 
     def stats
-      @stats ||= @doc.xpath('/html/body/div/div/div[2]/div[2]/div[1]/div/table/tbody/tr/td[3]/small/table')
-                     .map do |table|
+      return @stats unless @stats.nil?
+
+      tables = @doc.xpath('/html/body/div/div/div[2]/div[2]/div[1]/div/table/tbody/tr/td[3]/small/table')
+
+      pb = ProgressBar.create(
+        title: 'Scraping stats tables',
+        total: tables.size,
+        format: '%t |%b>%i| %c/%C'
+      )
+
+      @stats = tables.map do |table|
+        pb.increment
+
         speed, crit_rate = table.css('th')
                                 .map(&:text)
                                 .first(2)
@@ -66,7 +100,17 @@ module Scraper
     end
 
     def monsties
-      names.each_with_index.reduce([]) do |monstie_ary, (name, index)|
+      return @monsties unless @monsties.nil?
+
+      pb = ProgressBar.create(
+        title: 'Normalizing data',
+        total: names.size,
+        format: '%t |%b>%i| %c/%C'
+      )
+
+      @monsties = names.each_with_index.reduce([]) do |monstie_ary, (name, index)|
+        pb.increment
+
         monstie_ary.append({
           name: name,
           stats: stats[index]
@@ -75,7 +119,19 @@ module Scraper
     end
 
     def export_json
-      File.open('monsties.json', 'w') { |file| file.write(monsties.to_json) }
+      filename = 'monsties.json'
+
+      pb = ProgressBar.create(
+        title: "Exporting data to #{filename}",
+        total: monsties.size,
+        format: '%t |%b>%i| %c/%C'
+      )
+
+      File.open(filename, 'w') do |file|
+        file.write(monsties.to_json)
+
+        pb.increment
+      end
     end
   end
 end
